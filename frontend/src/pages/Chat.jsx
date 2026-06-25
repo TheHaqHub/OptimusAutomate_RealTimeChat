@@ -18,6 +18,7 @@ export default function Chat() {
 
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [focusDM, setFocusDM] = useState(false);
 
   useEffect(() => {
     getRooms().then((res) => setRooms(res.data.data.rooms));
@@ -61,7 +62,7 @@ export default function Chat() {
     if (activeRoom) socket.emit("leave_room", { roomId: activeRoom._id });
     setActiveRoom(room);
     setLoadingMessages(true);
-    setSidebarOpen(false); // close sidebar on mobile after selecting room
+    setSidebarOpen(false);
 
     try {
       const res = await getRoomMessages(room._id);
@@ -99,23 +100,38 @@ export default function Chat() {
     }
   };
 
+  // Welcome card handlers
+  const handleBrowseRooms = () => {
+    setSidebarOpen(true);
+    setFocusDM(false);
+    // If rooms exist, select the first one
+    if (rooms.length > 0) {
+      handleSelectRoom(rooms[0]);
+    }
+  };
+
+  const handleBrowseDMs = () => {
+    setSidebarOpen(true);
+    setFocusDM(true);
+  };
+
   return (
     <div className="flex h-screen bg-zinc-950 text-zinc-100 overflow-hidden relative">
 
-      {/* Mobile overlay when sidebar open */}
+      {/* Mobile overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/60 z-20 lg:hidden"
+          className="fixed inset-0 bg-black/70 z-20 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
-      {/* Sidebar — drawer on mobile, fixed on desktop */}
+      {/* Sidebar */}
       <div className={`
-        fixed lg:relative inset-y-0 left-0 z-30
-        transform transition-transform duration-200 ease-in-out
+        fixed inset-y-0 left-0 z-30 h-full
+        transform transition-transform duration-250 ease-in-out
+        lg:relative lg:translate-x-0 lg:flex
         ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
-        lg:translate-x-0 lg:flex
       `}>
         <Sidebar
           user={user}
@@ -126,13 +142,15 @@ export default function Chat() {
           onCreateRoom={handleCreateRoom}
           onStartDM={handleStartDM}
           onLogout={logout}
+          focusDM={focusDM}
+          onFocusDMDone={() => setFocusDM(false)}
         />
       </div>
 
       {/* Main area */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Mobile header with hamburger */}
-        <div className="lg:hidden h-14 border-b border-zinc-800 px-4 flex items-center gap-3 bg-zinc-900">
+      <div className="flex-1 flex flex-col min-w-0 w-full">
+        {/* Mobile header */}
+        <div className="lg:hidden h-14 border-b border-zinc-800 px-4 flex items-center gap-3 bg-zinc-900 flex-shrink-0">
           <button
             onClick={() => setSidebarOpen(true)}
             className="text-zinc-400 hover:text-white p-1"
@@ -144,10 +162,11 @@ export default function Chat() {
           <span className="text-sm font-medium text-zinc-300">
             {activeRoom
               ? activeRoom.type === "dm"
-                ? activeRoom.participants?.find(p => p._id !== user?.id && p._id !== user?._id)?.name || "DM"
+                ? activeRoom.participants?.find(
+                    (p) => p._id !== user?.id && p._id !== user?._id
+                  )?.name || "DM"
                 : activeRoom.name
-              : "OptimusChat"
-            }
+              : "OptimusChat"}
           </span>
         </div>
 
@@ -158,8 +177,9 @@ export default function Chat() {
             activeRoom={activeRoom}
             messages={messages}
             loading={loadingMessages}
+            onBrowseRooms={handleBrowseRooms}
+            onBrowseDMs={handleBrowseDMs}
           />
-          {/* Members panel — hidden on mobile */}
           <div className="hidden lg:block">
             <MembersList activeRoom={activeRoom} />
           </div>

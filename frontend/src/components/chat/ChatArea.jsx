@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { getSocket } from "../../utils/socket.js";
 import useChatStore from "../../store/chatStore.js";
 
-export default function ChatArea({ user, activeRoom, messages, loading }) {
+export default function ChatArea({ user, activeRoom, messages, loading, onBrowseRooms, onBrowseDMs }) {
   const [text, setText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const typingTimeout = useRef(null);
@@ -57,10 +57,10 @@ export default function ChatArea({ user, activeRoom, messages, loading }) {
     return activeRoom.name;
   };
 
-  if (!activeRoom) {
+if (!activeRoom) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-zinc-950">
-        <div className="text-center max-w-sm px-6">
+      <div className="flex-1 flex items-center justify-center bg-zinc-950 p-6">
+        <div className="text-center max-w-sm w-full">
           <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto mb-5">
             <div className="w-6 h-6 rounded-lg bg-emerald-500 flex items-center justify-center">
               <span className="text-black font-bold text-xs">OC</span>
@@ -69,20 +69,30 @@ export default function ChatArea({ user, activeRoom, messages, loading }) {
           <h2 className="text-white font-semibold text-lg mb-2">
             Welcome to OptimusChat
           </h2>
-          <p className="text-zinc-500 text-sm leading-relaxed">
+          <p className="text-zinc-500 text-sm leading-relaxed mb-6">
             Select a room from the sidebar to start chatting, or open a Direct Message to talk privately.
           </p>
-          <div className="mt-6 grid grid-cols-2 gap-3 text-left">
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block mb-2" />
-              <p className="text-xs font-medium text-zinc-300 mb-0.5">Public Rooms</p>
+          <div className="grid grid-cols-2 gap-3 text-left">
+            <button
+              onClick={onBrowseRooms}
+              className="bg-zinc-900 border border-zinc-800 hover:border-emerald-500/50 hover:bg-zinc-800 rounded-xl p-4 text-left transition-colors group"
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block mb-3" />
+              <p className="text-sm font-medium text-zinc-300 group-hover:text-white mb-0.5">
+                Public Rooms
+              </p>
               <p className="text-xs text-zinc-500">Chat with everyone</p>
-            </div>
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3">
-              <span className="w-2 h-2 rounded-full bg-zinc-500 inline-block mb-2" />
-              <p className="text-xs font-medium text-zinc-300 mb-0.5">Direct Messages</p>
+            </button>
+            <button
+              onClick={onBrowseDMs}
+              className="bg-zinc-900 border border-zinc-800 hover:border-emerald-500/50 hover:bg-zinc-800 rounded-xl p-4 text-left transition-colors group"
+            >
+              <span className="w-2 h-2 rounded-full bg-zinc-500 inline-block mb-3" />
+              <p className="text-sm font-medium text-zinc-300 group-hover:text-white mb-0.5">
+                Direct Messages
+              </p>
               <p className="text-xs text-zinc-500">Private conversations</p>
-            </div>
+            </button>
           </div>
         </div>
       </div>
