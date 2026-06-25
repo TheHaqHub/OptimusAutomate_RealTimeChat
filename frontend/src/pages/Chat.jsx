@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import useAuthStore from "../store/authStore.js";
 import useChatStore from "../store/chatStore.js";
 import { getRooms, createRoom, getRoomMessages, getDMs, getOrCreateDM } from "../api/room.api.js";
-import { searchUsers } from "../api/user.api.js";
 import { getSocket } from "../utils/socket.js";
 import Sidebar from "../components/chat/Sidebar.jsx";
 import ChatArea from "../components/chat/ChatArea.jsx";
@@ -18,14 +17,13 @@ export default function Chat() {
   } = useChatStore();
 
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Load rooms and DMs on mount
   useEffect(() => {
     getRooms().then((res) => setRooms(res.data.data.rooms));
     getDMs().then((res) => setDMs(res.data.data.dms));
   }, []);
 
-  // Socket event listeners
   useEffect(() => {
     const socket = getSocket();
     if (!socket) return;
@@ -60,12 +58,10 @@ export default function Chat() {
 
   const handleSelectRoom = async (room) => {
     const socket = getSocket();
-
-    // Leave previous room
     if (activeRoom) socket.emit("leave_room", { roomId: activeRoom._id });
-
     setActiveRoom(room);
     setLoadingMessages(true);
+    setSidebarOpen(false); // close sidebar on mobile after selecting room
 
     try {
       const res = await getRoomMessages(room._id);
@@ -76,7 +72,6 @@ export default function Chat() {
       setLoadingMessages(false);
     }
 
-    // Join new room via socket
     socket.emit("join_room", { roomId: room._id });
   };
 
@@ -95,7 +90,6 @@ export default function Chat() {
     try {
       const res = await getOrCreateDM(userId);
       const dm = res.data.data.room;
-      // Add to DMs list if not already there
       setDMs((prev) =>
         prev.find((d) => d._id === dm._id) ? prev : [...prev, dm]
       );
@@ -106,28 +100,71 @@ export default function Chat() {
   };
 
   return (
-    <div className="flex h-screen bg-zinc-950 text-zinc-100 overflow-hidden">
-      <Sidebar
-        user={user}
-        rooms={rooms}
-        dms={dms}
-        activeRoom={activeRoom}
-        onSelectRoom={handleSelectRoom}
-        onCreateRoom={handleCreateRoom}
-        onStartDM={handleStartDM}
-        onLogout={logout}
-      />
-      <ChatArea
-        user={user}
-        activeRoom={activeRoom}
-        messages={messages}
-        loading={loadingMessages}
-      />
-      <MembersList
-        activeRoom={activeRoom}
-        rooms={rooms}
-        dms={dms}
-      />
+    <div className="flex h-screen bg-zinc-950 text-zinc-100 overflow-hidden relative">
+
+      {/* Mobile overlay when sidebar open */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/60 z-20 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar — drawer on mobile, fixed on desktop */}
+      <div className={`
+        fixed lg:relative inset-y-0 left-0 z-30
+        transform transition-transform duration-200 ease-in-out
+        ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
+        lg:translate-x-0 lg:flex
+      `}>
+        <Sidebar
+          user={user}
+          rooms={rooms}
+          dms={dms}
+          activeRoom={activeRoom}
+          onSelectRoom={handleSelectRoom}
+          onCreateRoom={handleCreateRoom}
+          onStartDM={handleStartDM}
+          onLogout={logout}
+        />
+      </div>
+
+      {/* Main area */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Mobile header with hamburger */}
+        <div className="lg:hidden h-14 border-b border-zinc-800 px-4 flex items-center gap-3 bg-zinc-900">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="text-zinc-400 hover:text-white p-1"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          <span className="text-sm font-medium text-zinc-300">
+            {activeRoom
+              ? activeRoom.type === "dm"
+                ? activeRoom.participants?.find(p => p._id !== user?.id && p._id !== user?._id)?.name || "DM"
+                : activeRoom.name
+              : "OptimusChat"
+            }
+          </span>
+        </div>
+
+        {/* Chat + Members */}
+        <div className="flex-1 flex min-h-0">
+          <ChatArea
+            user={user}
+            activeRoom={activeRoom}
+            messages={messages}
+            loading={loadingMessages}
+          />
+          {/* Members panel — hidden on mobile */}
+          <div className="hidden lg:block">
+            <MembersList activeRoom={activeRoom} />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
