@@ -7,16 +7,42 @@ const useChatStore = create((set, get) => ({
   messages: [],
   onlineUsers: [],
   typingUsers: {},
+  unreadCounts: {},
 
   setRooms: (rooms) => set({ rooms }),
   setDMs: (dms) => set({ dms }),
 
-  setActiveRoom: (room) => set({ activeRoom: room, messages: [] }),
+  setActiveRoom: (room) =>
+    set((state) => ({
+      activeRoom: room,
+      messages: [],
+      unreadCounts: { ...state.unreadCounts, [room._id]: 0 },
+    })),
 
   setMessages: (messages) => set({ messages }),
 
+  // ✅ Background room ka message — count badhao, active room ka — array mein add karo
   addMessage: (message) =>
-    set((state) => ({ messages: [...state.messages, message] })),
+    set((state) => {
+      const isActive = state.activeRoom?._id === message.room;
+      const prevCount = state.unreadCounts[message.room] || 0;
+
+      return {
+        // Active room ka message array mein, warna array same rahega
+        messages: isActive
+          ? [...state.messages, message]
+          : state.messages,
+        // Background room ka unread count badhao
+        unreadCounts: isActive
+          ? state.unreadCounts
+          : { ...state.unreadCounts, [message.room]: prevCount + 1 },
+      };
+    }),
+
+  clearUnread: (roomId) =>
+    set((state) => ({
+      unreadCounts: { ...state.unreadCounts, [roomId]: 0 },
+    })),
 
   setOnlineUsers: (users) => set({ onlineUsers: users }),
 

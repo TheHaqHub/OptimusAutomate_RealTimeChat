@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import useAuthStore from "../store/authStore.js";
 import useChatStore from "../store/chatStore.js";
 import { getRooms, createRoom, getRoomMessages, getDMs, getOrCreateDM } from "../api/room.api.js";
@@ -12,7 +12,7 @@ export default function Chat() {
   const {
     rooms, dms, activeRoom, messages,
     setRooms, setDMs, setActiveRoom, setMessages,
-    addMessage, setOnlineUsers, addOnlineUser,
+    addMessage, clearUnread, setOnlineUsers, addOnlineUser,
     removeOnlineUser, setTyping, clearTyping,
   } = useChatStore();
 
@@ -20,11 +20,36 @@ export default function Chat() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [focusDM, setFocusDM] = useState(false);
 
+  const activeRoomRef = useRef(activeRoom);
   useEffect(() => {
-    getRooms().then((res) => setRooms(res.data.data.rooms));
-    getDMs().then((res) => setDMs(res.data.data.dms));
+    activeRoomRef.current = activeRoom;
+  }, [activeRoom]);
+
+  useEffect(() => {
+    const socket = getSocket();
+
+    // ✅ Rooms fetch + auto-join
+    getRooms().then((res) => {
+      const fetchedRooms = res.data.data.rooms;
+      setRooms(fetchedRooms);
+      // Saare public rooms background join
+      fetchedRooms.forEach((room) => {
+        socket.emit("join_room", { roomId: room._id });
+      });
+    });
+
+    // ✅ DMs fetch + auto-join
+    getDMs().then((res) => {
+      const fetchedDMs = res.data.data.dms;
+      setDMs(fetchedDMs);
+      // Saare DMs background join
+      fetchedDMs.forEach((dm) => {
+        socket.emit("join_room", { roomId: dm._id });
+      });
+    });
   }, []);
 
+  // ✅ Socket listeners
   useEffect(() => {
     const socket = getSocket();
     if (!socket) return;
@@ -34,18 +59,35 @@ export default function Chat() {
     socket.on("user_offline", ({ userId }) => removeOnlineUser(userId));
 
     socket.on("receive_message", (message) => {
-      if (activeRoom && message.room === activeRoom._id) {
-        addMessage(message);
+      const current = activeRoomRef.current;
+      // ✅ Hamesha addMessage karo — chatStore khud decide karega unread badhana ya nahi
+      addMessage(message);
+
+      // ✅ Browser notification — sirf background room ka
+      if (!current || message.room !== current._id) {
+        if (Notification.permission === "granted") {
+          new Notification(`💬 ${message.sender?.name}`, {
+            body: message.content,
+            icon: "/favicon.ico",
+          });
+        }
       }
     });
 
     socket.on("typing", ({ userId, name, roomId }) => {
-      if (activeRoom?._id === roomId) setTyping(roomId, userId, name);
+      const current = activeRoomRef.current;
+      if (current?._id === roomId) setTyping(roomId, userId, name);
     });
 
     socket.on("stop_typing", ({ userId, roomId }) => {
-      if (activeRoom?._id === roomId) clearTyping(roomId, userId);
+      const current = activeRoomRef.current;
+      if (current?._id === roomId) clearTyping(roomId, userId);
     });
+
+    // ✅ Browser notification permission
+    if (Notification.permission === "default") {
+      Notification.requestPermission();
+    }
 
     return () => {
       socket.off("online_users");
@@ -55,12 +97,16 @@ export default function Chat() {
       socket.off("typing");
       socket.off("stop_typing");
     };
-  }, [activeRoom]);
+  }, []);
 
-  const handleSelectRoom = async (room) => {
+const handleSelectRoom = async (room) => {
     const socket = getSocket();
-    if (activeRoom) socket.emit("leave_room", { roomId: activeRoom._id });
+
+    // ✅ Koi bhi room leave mat karo — sab background join rehne do
+    // (remove karo pehle wala leave_room logic)
+
     setActiveRoom(room);
+    clearUnread(room._id);
     setLoadingMessages(true);
     setSidebarOpen(false);
 
@@ -91,6 +137,9 @@ export default function Chat() {
     try {
       const res = await getOrCreateDM(userId);
       const dm = res.data.data.room;
+      // ✅ Naya DM bhi auto-join karo
+      const socket = getSocket();
+      socket.emit("join_room", { roomId: dm._id });
       setDMs((prev) =>
         prev.find((d) => d._id === dm._id) ? prev : [...prev, dm]
       );
@@ -100,14 +149,10 @@ export default function Chat() {
     }
   };
 
-  // Welcome card handlers
   const handleBrowseRooms = () => {
     setSidebarOpen(true);
     setFocusDM(false);
-    // If rooms exist, select the first one
-    if (rooms.length > 0) {
-      handleSelectRoom(rooms[0]);
-    }
+    if (rooms.length > 0) handleSelectRoom(rooms[0]);
   };
 
   const handleBrowseDMs = () => {
@@ -117,8 +162,6 @@ export default function Chat() {
 
   return (
     <div className="flex h-screen bg-zinc-950 text-zinc-100 overflow-hidden relative">
-
-      {/* Mobile overlay */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-black/70 z-20 lg:hidden"
@@ -126,7 +169,6 @@ export default function Chat() {
         />
       )}
 
-      {/* Sidebar */}
       <div className={`
         fixed inset-y-0 left-0 z-30 h-full
         transform transition-transform duration-250 ease-in-out
@@ -147,9 +189,7 @@ export default function Chat() {
         />
       </div>
 
-      {/* Main area */}
       <div className="flex-1 flex flex-col min-w-0 w-full">
-        {/* Mobile header */}
         <div className="lg:hidden h-14 border-b border-zinc-800 px-4 flex items-center gap-3 bg-zinc-900 flex-shrink-0">
           <button
             onClick={() => setSidebarOpen(true)}
@@ -170,7 +210,6 @@ export default function Chat() {
           </span>
         </div>
 
-        {/* Chat + Members */}
         <div className="flex-1 flex min-h-0">
           <ChatArea
             user={user}
